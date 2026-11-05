@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>換算貪吃蛇｜毫米與公分</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; padding: 20px; overflow: hidden;
+    background: radial-gradient(circle at 30% 20%, #1b2a4a 0%, #0d1424 55%, #070a12 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    color: #e8eefc; user-select: none;
+  }
+  .hud {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+    gap: 6px 16px; font-variant-numeric: tabular-nums;
+    font-size: 15px; letter-spacing: 0.5px; color: #9fb3d9;
+  }
+  .hud b { color: #e8eefc; font-size: 18px; font-weight: 600; }
+  .hud .best b { color: #ffd166; }
+  .hud .ok b { color: #7ef0c8; }
+  .hud .bad b { color: #ff8fa3; }
+  .board-wrap { position: relative; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(120,160,255,.18), 0 24px 60px rgba(0,0,0,.55), inset 0 0 80px rgba(60,120,255,.06);
+    background: #0b1120;
+  }
+  canvas { display: block; touch-action: none; }
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; justify-content: safe center;
+    gap: 14px; text-align: center; overflow-y: auto;
+    background: rgba(7, 10, 18, 0.78); backdrop-filter: blur(6px);
+    transition: opacity .25s ease; padding: 24px;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+  .overlay h1 { font-size: 30px; font-weight: 700; letter-spacing: 2px;
+    background: linear-gradient(135deg, #7ef0c8, #5ea8ff); -webkit-background-clip: text;
+    background-clip: text; -webkit-text-fill-color: transparent; }
+  .overlay p { color: #93a7cc; font-size: 14px; line-height: 1.8; }
+  .overlay kbd {
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+    border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; font-size: 12px;
+    font-family: ui-monospace, monospace; color: #cfe0ff;
+  }
+  .btn {
+    margin-top: 6px; padding: 11px 30px; border: none; border-radius: 999px; cursor: pointer;
+    font-size: 15px; font-weight: 600; letter-spacing: 1px; color: #05121a;
+    background: linear-gradient(135deg, #7ef0c8, #5ea8ff);
+    box-shadow: 0 8px 24px rgba(94,168,255,.35); transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:active { transform: scale(.96); box-shadow: 0 4px 14px rgba(94,168,255,.25); }
+  .final { font-size: 17px; color: #e8eefc; }
+  .final span { color: #ffd166; font-weight: 700; }
+  .rule { font-size: 13px; letter-spacing: 2px; color: #7ef0c8; }
+  .countdown {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 4px; pointer-events: none;
+    opacity: 0; visibility: hidden; transition: opacity .15s ease, visibility .15s ease;
+  }
+  .countdown.show { opacity: 1; visibility: visible; }
+  .cd-num {
+    font-size: 96px; font-weight: 800; line-height: 1; color: #7ef0c8;
+    text-shadow: 0 0 46px rgba(126,240,200,.65);
+  }
+  .cd-hint { font-size: 14px; letter-spacing: 3px; color: #9fb3d9; }
+  .qbar {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    width: min(100%, 560px); padding: 9px 18px; border-radius: 14px;
+    background: linear-gradient(135deg, rgba(94,168,255,.14), rgba(126,240,200,.08));
+    border: 1px solid rgba(120,160,255,.2);
+    box-shadow: 0 8px 30px rgba(0,0,0,.3);
+  }
+  .qlevel {
+    flex: none; font-size: 12px; letter-spacing: 1px; color: #7ef0c8;
+    padding: 3px 9px; border-radius: 999px; background: rgba(126,240,200,.12);
+    font-variant-numeric: tabular-nums;
+  }
+  .qtext {
+    font-size: clamp(17px, 4vw, 22px); font-weight: 700; letter-spacing: 1px;
+    font-variant-numeric: tabular-nums; color: #e8eefc;
+  }
+  .overlay .qrecap { font-size: 17px; font-weight: 700; color: #cfe0ff; letter-spacing: 1px; }
+  .overlay .explain { font-size: 13px; color: #93a7cc; line-height: 1.7; }
+  .overlay .final b { color: #ffd166; }
+  .pad { display: grid; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(3, 54px); gap: 8px; }
+  .pad button {
+    border: 1px solid rgba(120,160,255,.2); background: rgba(120,160,255,.08);
+    border-radius: 12px; color: #9fb3d9; font-size: 18px; cursor: pointer;
+  }
+  .pad button:active { background: rgba(120,160,255,.22); }
+  .pad .up { grid-area: 1 / 2; } .pad .left { grid-area: 2 / 1; }
+  .pad .right { grid-area: 2 / 3; } .pad .down { grid-area: 3 / 2; }
+  @media (hover: hover) and (pointer: fine) { .pad { display: none; } }
+  @media (max-width: 480px) {
+    .overlay { padding: 16px; gap: 10px; }
+    .overlay h1 { font-size: 25px; }
+    .overlay p { font-size: 13px; line-height: 1.65; }
+    .qbar { gap: 8px; padding: 7px 12px; }
+    .qlevel { font-size: 11px; padding: 2px 8px; }
+    .qtext { font-size: 16px; }
+    .overlay .qrecap { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+  <div class="hud">
+    <div>分數 <b id="score">0</b></div>
+    <div class="best">最高 <b id="best">0</b></div>
+    <div>速度 <b id="speed">1</b></div>
+    <div class="ok">答對 <b id="correct">0</b></div>
+    <div class="bad">答錯 <b id="wrong">0</b></div>
+  </div>
+  <div class="qbar" id="qbar">
+    <span class="qlevel" id="qlevel">第 1 關</span>
+    <span class="qtext" id="qtext">1 公分 = 10 毫米</span>
+  </div>
+  <div class="board-wrap">
+    <canvas id="game"></canvas>
+    <div class="countdown" id="countdown"><span class="cd-num">3</span><span class="cd-hint">準備開始</span></div>
+    <div class="overlay" id="overlay">
+      <h1>換算貪吃蛇</h1>
+      <p class="rule">1 公分 = 10 毫米</p>
+      <p><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> 或 <kbd>WASD</kbd> 移動<br>場上三顆果實標著不同數字，吃下正確答案才能過關<br>吃錯答案遊戲就結束，撞牆或撞到自己也會結束<br>點擊畫面或按方向鍵即可開始</p>
+      <button class="btn" id="startBtn">開始遊戲</button>
+    </div>
+  </div>
+  <div class="pad">
+    <button class="up" data-dir="up" aria-label="上">▲</button>
+    <button class="left" data-dir="left" aria-label="左">◀</button>
+    <button class="right" data-dir="right" aria-label="右">▶</button>
+    <button class="down" data-dir="down" aria-label="下">▼</button>
+  </div>
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const speedEl = document.getElementById('speed');
+  const correctEl = document.getElementById('correct');
+  const wrongEl = document.getElementById('wrong');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+  const countdown = document.getElementById('countdown');
+  const cdNum = countdown.querySelector('.cd-num');
+  const qlevelEl = document.getElementById('qlevel');
+  const qtextEl = document.getElementById('qtext');
+
+  const COLS = 20, ROWS = 20;
+  let cell = 24;
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function fit() {
+    const maxW = Math.min(window.innerWidth - 40, 560);
+    const maxH = window.innerHeight - 330;
+    const size = Math.max(240, Math.min(maxW, maxH, 520));
+    cell = Math.floor(size / COLS);
+    canvas.width = cell * COLS * DPR;
+    canvas.height = cell * ROWS * DPR;
+    canvas.style.width = cell * COLS + 'px';
+    canvas.style.height = cell * ROWS + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  fit();
+  window.addEventListener('resize', fit);
+
+  let snake, dir, nextDir, foods, score, best, speed, running, phase, cdStart, acc, last, tickMs, particles, pulse;
+  let correct, wrong, quizCount, currentQ;
+  const CD_MS = 800;
+  best = +(localStorage.getItem('snake-best') || 0);
+  bestEl.textContent = best;
+
+  function reset() {
+    snake = [{x: 9, y: 10}, {x: 8, y: 10}, {x: 7, y: 10}];
+    dir = {x: 1, y: 0};
+    nextDir = {x: 1, y: 0};
+    score = 0;
+    speed = 1;
+    correct = 0;
+    wrong = 0;
+    quizCount = 0;
+    currentQ = makeQuestion();
+    foods = [];
+    tickMs = 200;
+    running = false;
+    phase = 'countdown';
+    cdStart = performance.now();
+    acc = 0;
+    last = cdStart;
+    particles = [];
+    pulse = 0;
+    scoreEl.textContent = '0';
+    speedEl.textContent = '1';
+    correctEl.textContent = '0';
+    wrongEl.textContent = '0';
+    cdNum.textContent = '3';
+    countdown.classList.add('show');
+    updateQbar();
+    placeFruits();
+    overlay.classList.add('hidden');
+  }
+
+  function updateQbar() {
+    qlevelEl.textContent = `第 ${quizCount + 1} 關`;
+    qtextEl.textContent = currentQ.prompt;
+  }
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function makeFruitValues(answer) {
+    const values = new Set([answer]);
+    const candidates = [
+      answer * 10, answer / 10, answer + 10, answer - 10,
+      answer + 1, answer - 1, answer + 0.5, answer - 0.5,
+      answer + 2, answer - 2, answer + 5, answer - 5,
+      answer + 20, answer - 20
+    ];
+    for (const raw of shuffle(candidates)) {
+      if (values.size >= 3) break;
+      const v = Number(raw.toFixed(2));
+      if (v > 0 && !values.has(v)) values.add(v);
+    }
+    let extra = 1;
+    while (values.size < 3) {
+      const v = answer + extra++;
+      if (v > 0 && !values.has(v)) values.add(v);
+    }
+    return shuffle([...values]);
+  }
+
+  function placeFruits() {
+    const values = makeFruitValues(currentQ.answer);
+    const occupied = new Set(snake.map(s => `${s.x},${s.y}`));
+    const head = snake[0];
+    for (let i = 1; i <= 2; i++) {
+      occupied.add(`${head.x + dir.x * i},${head.y + dir.y * i}`);
+    }
+    const cells = [];
+    for (let y = 0; y < ROWS; y++)
+      for (let x = 0; x < COLS; x++)
+        if (!occupied.has(`${x},${y}`)) cells.push({x, y});
+    shuffle(cells);
+    foods = [];
+    for (const value of values) {
+      let placed = false;
+      for (let k = 0; k < cells.length; k++) {
+        const c = cells[k];
+        if (foods.every(f => Math.abs(f.x - c.x) + Math.abs(f.y - c.y) >= 3)) {
+          foods.push({x: c.x, y: c.y, value, phase: Math.random() * Math.PI * 2});
+          cells.splice(k, 1);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed && cells.length) {
+        const c = cells.pop();
+        foods.push({x: c.x, y: c.y, value, phase: Math.random() * Math.PI * 2});
+      }
+    }
+  }
+
+  function setDir(nx, ny) {
+    if (!running && phase !== 'countdown') return;
+    if (nx === -dir.x && ny === -dir.y) return;
+    nextDir = {x: nx, y: ny};
+  }
+
+  const keymap = {
+    ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+    w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+    W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0]
+  };
+  window.addEventListener('keydown', e => {
+    const k = keymap[e.key];
+    if (!running && phase !== 'countdown') {
+      if (k) { e.preventDefault(); reset(); setDir(k[0], k[1]); return; }
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); reset(); return; }
+    }
+    if (k) { e.preventDefault(); setDir(k[0], k[1]); }
+  });
+  window.addEventListener('pointerdown', e => {
+    if (running || phase === 'countdown' || e.target.closest('button')) return;
+    reset();
+  }, true);
+  document.querySelectorAll('.pad button').forEach(b => {
+    const d = {up: [0,-1], down: [0,1], left: [-1,0], right: [1,0]}[b.dataset.dir];
+    b.addEventListener('pointerdown', e => { e.preventDefault(); setDir(d[0], d[1]); });
+  });
+  startBtn.addEventListener('click', reset);
+
+  let touchStart = null;
+  canvas.addEventListener('pointerdown', e => { touchStart = {x: e.clientX, y: e.clientY}; });
+  canvas.addEventListener('pointerup', e => {
+    if (!touchStart) return;
+    const dx = e.clientX - touchStart.x, dy = e.clientY - touchStart.y;
+    if (Math.hypot(dx, dy) > 20) {
+      if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+      else setDir(0, dy > 0 ? 1 : -1);
+    }
+    touchStart = null;
+  });
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const isAutoplay = urlParams.get('autoplay') === '1' || urlParams.get('autoplay') === 'true';
+
+  function aiMove() {
+    if (!running || !currentQ) return;
+    const target = foods.find(f => f.value === currentQ.answer);
+    if (!target) return;
+    const head = snake[0];
+    const targetScore = 50;
+
+    if (score >= targetScore) {
+      const deathDirs = [{x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}];
+      for (const d of deathDirs) {
+        if (d.x === -dir.x && d.y === -dir.y) continue;
+        const nx = head.x + d.x, ny = head.y + d.y;
+        if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS || snake.some(s => s.x === nx && s.y === ny)) {
+          nextDir = d;
+          return;
+        }
+      }
+    }
+
+    const queue = [];
+    const visited = new Set();
+    const key = (x, y) => `${x},${y}`;
+    const obstacles = new Set(snake.slice(0, -1).map(s => key(s.x, s.y)));
+    for (const f of foods) {
+      if (f.value !== currentQ.answer) obstacles.add(key(f.x, f.y));
+    }
+    const dirs = [{x: 0, y: -1}, {x: 0, y: 1}, {x: -1, y: 0}, {x: 1, y: 0}];
+
+    visited.add(key(head.x, head.y));
+    for (const d of dirs) {
+      if (d.x === -dir.x && d.y === -dir.y) continue;
+      const nx = head.x + d.x, ny = head.y + d.y;
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !obstacles.has(key(nx, ny))) {
+        visited.add(key(nx, ny));
+        queue.push({x: nx, y: ny, firstDir: d});
+      }
+    }
+
+    let foundDir = null;
+    while (queue.length > 0) {
+      const cur = queue.shift();
+      if (cur.x === target.x && cur.y === target.y) {
+        foundDir = cur.firstDir;
+        break;
+      }
+      for (const d of dirs) {
+        const nx = cur.x + d.x, ny = cur.y + d.y;
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !obstacles.has(key(nx, ny)) && !visited.has(key(nx, ny))) {
+          visited.add(key(nx, ny));
+          queue.push({x: nx, y: ny, firstDir: cur.firstDir});
+        }
+      }
+    }
+
+    if (foundDir) {
+      nextDir = foundDir;
+      return;
+    }
+
+    for (const d of dirs) {
+      if (d.x === -dir.x && d.y === -dir.y) continue;
+      const nx = head.x + d.x, ny = head.y + d.y;
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !obstacles.has(key(nx, ny))) {
+        nextDir = d;
+        return;
+      }
+    }
+  }
+
+  function fmt(n) {
+    return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)));
+  }
+
+  function makeQuestion() {
+    const stage = Math.min(4, Math.floor(quizCount / 3));
+    const types = ['cm2mm'];
+    if (stage >= 1) types.push('mm2cm');
+    if (stage >= 2) types.push('cm2mmDec');
+    if (stage >= 3) types.push('mm2cmDec');
+    if (stage >= 4) types.push('cm2mmBig', 'mm2cmBig');
+    const type = types[Math.floor(Math.random() * types.length)];
+    let prompt, answer, explain, unit;
+
+    if (type === 'cm2mm') {
+      const cm = 1 + Math.floor(Math.random() * 9);
+      answer = cm * 10;
+      unit = '毫米';
+      prompt = `${cm} 公分 = ? 毫米`;
+      explain = `1 公分 = 10 毫米，所以 ${cm} 公分 = ${answer} 毫米。`;
+    } else if (type === 'mm2cm') {
+      const cm = 1 + Math.floor(Math.random() * 9);
+      answer = cm;
+      unit = '公分';
+      prompt = `${cm * 10} 毫米 = ? 公分`;
+      explain = `10 毫米 = 1 公分，所以 ${cm * 10} 毫米 = ${cm} 公分。`;
+    } else if (type === 'cm2mmDec') {
+      const cm = (1 + Math.floor(Math.random() * 17)) / 2;
+      answer = cm * 10;
+      unit = '毫米';
+      prompt = `${fmt(cm)} 公分 = ? 毫米`;
+      explain = `1 公分 = 10 毫米，所以 ${fmt(cm)} 公分 = ${fmt(answer)} 毫米。`;
+    } else if (type === 'mm2cmDec') {
+      const cm = (1 + Math.floor(Math.random() * 19)) / 2;
+      answer = cm;
+      unit = '公分';
+      prompt = `${fmt(cm * 10)} 毫米 = ? 公分`;
+      explain = `10 毫米 = 1 公分，所以 ${fmt(cm * 10)} 毫米 = ${fmt(cm)} 公分。`;
+    } else if (type === 'cm2mmBig') {
+      const cm = 11 + Math.floor(Math.random() * 15);
+      answer = cm * 10;
+      unit = '毫米';
+      prompt = `${cm} 公分 = ? 毫米`;
+      explain = `1 公分 = 10 毫米，所以 ${cm} 公分 = ${answer} 毫米。`;
+    } else {
+      const cm = 11 + Math.floor(Math.random() * 15);
+      answer = cm;
+      unit = '公分';
+      prompt = `${cm * 10} 毫米 = ? 公分`;
+      explain = `10 毫米 = 1 公分，所以 ${cm * 10} 毫米 = ${cm} 公分。`;
+    }
+    return { prompt, answer, explain, unit };
+  }
+
+  function endGame(reason) {
+    running = false;
+    phase = 'over';
+    const isNewBest = score > best;
+    if (isNewBest) { best = score; localStorage.setItem('snake-best', best); bestEl.textContent = best; }
+    showOver(isNewBest, reason);
+  }
+
+  function step() {
+    if (isAutoplay && running) {
+      aiMove();
+    }
+    dir = nextDir;
+    const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+    if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS ||
+        snake.some(s => s.x === head.x && s.y === head.y)) {
+      endGame({type: 'crash'});
+      return;
+    }
+    snake.unshift(head);
+    const eaten = foods.find(f => f.x === head.x && f.y === head.y);
+    if (eaten) {
+      pulse = 1;
+      burst(head.x, head.y);
+      if (eaten.value === currentQ.answer) {
+        correct++;
+        correctEl.textContent = correct;
+        score += 10;
+        scoreEl.textContent = score;
+        speed = Math.min(9, 1 + correct);
+        speedEl.textContent = speed;
+        tickMs = Math.max(90, 200 - (speed - 1) * 12);
+        quizCount++;
+        currentQ = makeQuestion();
+        updateQbar();
+        placeFruits();
+      } else {
+        wrong++;
+        wrongEl.textContent = wrong;
+        endGame({type: 'wrong', chosen: eaten.value});
+        return;
+      }
+    } else {
+      snake.pop();
+    }
+  }
+
+  function burst(gx, gy) {
+    const cx = (gx + 0.5) * cell, cy = (gy + 0.5) * cell;
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2, v = 1 + Math.random() * 3;
+      particles.push({x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, r: 1.5 + Math.random() * 2.5});
+    }
+  }
+
+  function showOver(isNewBest, reason) {
+    countdown.classList.remove('show');
+    const total = correct + wrong;
+    const accuracy = total ? Math.round(correct / total * 100) : 0;
+    const isWrong = reason && reason.type === 'wrong';
+    const title = isWrong ? '答錯了！' : '遊戲結束';
+    const result = isWrong
+      ? `你吃了 <b>${fmt(reason.chosen)} ${currentQ.unit}</b>，正確答案是 <b>${fmt(currentQ.answer)} ${currentQ.unit}</b>。`
+      : `這題的答案是 <b>${fmt(currentQ.answer)} ${currentQ.unit}</b>。`;
+    overlay.innerHTML = `
+      <h1>${title}</h1>
+      <p class="qrecap">${currentQ.prompt}</p>
+      <p class="final">${result}</p>
+      <p class="explain">${currentQ.explain}</p>
+      <p class="final">本局得分 <span>${score}</span></p>
+      <p>答對 ${correct} 題 · 答錯 ${wrong} 題${total ? `（正確率 ${accuracy}%）` : ''}</p>
+      <p>${isNewBest ? '新紀錄！' : `最高紀錄 ${best}`}</p>
+      <button class="btn" id="startBtn">再玩一次</button>`;
+    overlay.classList.remove('hidden');
+    document.getElementById('startBtn').addEventListener('click', reset);
+    if (isAutoplay) {
+      window.gameOverDone = true;
+    }
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function draw(t) {
+    const W = cell * COLS, H = cell * ROWS;
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.fillStyle = '#0b1120';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(120,160,255,.045)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < COLS; i++) {
+      ctx.beginPath(); ctx.moveTo(i * cell + .5, 0); ctx.lineTo(i * cell + .5, H); ctx.stroke();
+    }
+    for (let i = 1; i < ROWS; i++) {
+      ctx.beginPath(); ctx.moveTo(0, i * cell + .5); ctx.lineTo(W, i * cell + .5); ctx.stroke();
+    }
+
+    for (const f of foods) {
+      const bob = Math.sin(t / 260 + f.phase) * cell * 0.05;
+      const cx = f.x * cell + cell / 2, cy = f.y * cell + cell / 2 + bob;
+      const bw = cell * 0.94, bh = cell * 0.74;
+      const radius = Math.min(bw, bh) * 0.42;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,120,90,.55)';
+      ctx.shadowBlur = cell * 0.55;
+      const g = ctx.createLinearGradient(cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2);
+      g.addColorStop(0, '#ffb26b');
+      g.addColorStop(1, '#ff4d6d');
+      ctx.fillStyle = g;
+      roundRect(cx - bw / 2, cy - bh / 2, bw, bh, radius);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.fillStyle = '#5fe3a1';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - bh / 2 - cell * 0.04, cell * 0.11, cell * 0.055, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      const label = fmt(f.value);
+      let fs = Math.max(8, cell * 0.34);
+      const maxW = bw - cell * 0.08;
+      ctx.font = `700 ${fs}px -apple-system, "PingFang TC", sans-serif`;
+      while (ctx.measureText(label).width > maxW && fs > 7) {
+        fs -= 0.5;
+        ctx.font = `700 ${fs}px -apple-system, "PingFang TC", sans-serif`;
+      }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#2a0b12';
+      ctx.fillText(label, cx, cy + cell * 0.02);
+    }
+
+    const n = snake.length;
+    for (let i = n - 1; i >= 0; i--) {
+      const s = snake[i];
+      const pad = Math.max(1.5, cell * 0.08);
+      const x = s.x * cell + pad, y = s.y * cell + pad;
+      const w = cell - pad * 2;
+      const ratio = i / Math.max(1, n - 1);
+      const glow = 1 - ratio;
+      ctx.save();
+      if (i === 0) {
+        ctx.shadowColor = 'rgba(126,240,200,.9)';
+        ctx.shadowBlur = cell * 0.8;
+      }
+      const c1 = `hsl(${168 + ratio * 55}, ${80 - ratio * 15}%, ${64 - ratio * 14}%)`;
+      const c2 = `hsl(${168 + ratio * 55}, ${75 - ratio * 15}%, ${48 - ratio * 12}%)`;
+      const g = ctx.createLinearGradient(x, y, x + w, y + w);
+      g.addColorStop(0, c1);
+      g.addColorStop(1, c2);
+      ctx.fillStyle = g;
+      roundRect(x, y, w, w, cell * (i === 0 ? 0.3 : 0.26));
+      ctx.fill();
+      if (i === 0) {
+        const ex = dir.x, ey = dir.y;
+        const cx0 = x + w / 2, cy0 = y + w / 2;
+        const off = w * 0.2;
+        const px = -ey, py = ex;
+        ctx.fillStyle = '#06131a';
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.arc(cx0 + ex * off + px * off * sgn, cy0 + ey * off + py * off * sgn, w * 0.1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    if (pulse > 0) {
+      ctx.strokeStyle = `rgba(126,240,200,${pulse * .5})`;
+      ctx.lineWidth = 2;
+      const s = snake[0];
+      ctx.beginPath();
+      ctx.arc((s.x + .5) * cell, (s.y + .5) * cell, cell * (1 + (1 - pulse) * 1.5), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= 0.025;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      ctx.fillStyle = `rgba(255,120,140,${p.life})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function loop(t) {
+    requestAnimationFrame(loop);
+    if (phase === 'countdown') {
+      const elapsed = t - cdStart;
+      const n = 3 - Math.floor(elapsed / CD_MS);
+      if (n > 0) {
+        cdNum.textContent = n;
+        const frac = (elapsed % CD_MS) / CD_MS;
+        cdNum.style.transform = `scale(${1 + (1 - frac) * 0.3})`;
+      } else {
+        phase = 'playing';
+        running = true;
+        last = t;
+        acc = 0;
+        countdown.classList.remove('show');
+      }
+    } else if (running) {
+      acc += t - last;
+      last = t;
+      while (acc >= tickMs) { acc -= tickMs; step(); if (!running) break; }
+    } else {
+      last = t;
+    }
+    if (pulse > 0) pulse = Math.max(0, pulse - 0.04);
+    draw(t);
+  }
+  requestAnimationFrame(loop);
+  if (isAutoplay) {
+    setTimeout(() => {
+      reset();
+    }, 1200);
+  }
+})();
+</script>
+</body>
+</html>
